@@ -20,9 +20,6 @@ uvicorn app.main:app --port 8000       # open http://127.0.0.1:8000 and create t
 ```
 PostgreSQL with migrations: `alembic upgrade head`. Docker Compose files are provided but were **not run** in the development environment.
 
-## Railway demo deployment
-See `docs/DEPLOY_RAILWAY.md` for the Railway service, PostgreSQL, setup-token, archive-volume, and verification steps. `railway.toml` configures the Dockerfile and health check.
-
 ## Documents (`docs/`)
 | File | Content |
 |---|---|
