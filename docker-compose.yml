@@ -1,0 +1,49 @@
+# NOT RUN in the development sandbox (no Docker available). Start with:  cp .env.example .env  (set POSTGRES_PASSWORD)  then  docker compose up -d --build
+# Then open https://localhost (or SITE_ADDRESS) and create the first administrator on the first-run screen.
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cybershield
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (no default password exists)}
+      POSTGRES_DB: cybershield
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cybershield -d cybershield"]
+      interval: 5s
+      retries: 12
+    networks: [internal]            # not reachable from user networks (SRS 7.9)
+  app:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    restart: unless-stopped
+    depends_on: {db: {condition: service_healthy}}
+    environment:
+      DATABASE_URL: postgresql+psycopg://cybershield:${POSTGRES_PASSWORD}@db:5432/cybershield
+      ARCHIVE_DIR: /data/archive
+      PUBLIC_URL: ${PUBLIC_URL:-https://localhost}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-cybershield@localhost}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    read_only: true
+    tmpfs: [/tmp]
+    volumes: [archive:/data/archive]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal, edge]      # edge gives outbound access for SMTP and webhooks
+    # Syslog from network devices (plaintext UDP/TCP): set SYSLOG_PORT and SYSLOG_SOURCE above, bind SYSLOG_HOST=0.0.0.0, and publish the port only to your log-ingest network.
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["80:80", "443:443"]
+    environment: {SITE_ADDRESS: "${SITE_ADDRESS:-localhost}"}
+    volumes: ["./deploy/Caddyfile:/etc/caddy/Caddyfile:ro", "caddydata:/data"]
+    networks: [edge]
+networks:
+  internal: {internal: true}
+  edge: {}
+volumes: {dbdata: {}, archive: {}, caddydata: {}}
